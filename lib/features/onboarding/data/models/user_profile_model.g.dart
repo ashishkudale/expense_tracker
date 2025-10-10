@@ -12,6 +12,7 @@ UserProfileModel _$UserProfileModelFromJson(Map<String, dynamic> json) =>
       name: json['name'] as String,
       currencyCode: json['currencyCode'] as String,
       createdAt: DateTime.parse(json['createdAt'] as String),
+      dateFormat: json['dateFormat'] as String? ?? 'dd/MM/yyyy',
     );
 
 Map<String, dynamic> _$UserProfileModelToJson(UserProfileModel instance) =>
@@ -19,5 +20,6 @@ Map<String, dynamic> _$UserProfileModelToJson(UserProfileModel instance) =>
       'id': instance.id,
       'name': instance.name,
       'currencyCode': instance.currencyCode,
+      'dateFormat': instance.dateFormat,
       'createdAt': instance.createdAt.toIso8601String(),
     };

@@ -10,6 +10,7 @@ class UserProfileModel extends UserProfile {
     required super.name,
     required super.currencyCode,
     required super.createdAt,
+    super.dateFormat = 'dd/MM/yyyy',
   });
 
   factory UserProfileModel.fromJson(Map<String, dynamic> json) =>
@@ -22,6 +23,7 @@ class UserProfileModel extends UserProfile {
       id: entity.id,
       name: entity.name,
       currencyCode: entity.currencyCode,
+      dateFormat: entity.dateFormat,
       createdAt: entity.createdAt,
     );
   }
@@ -31,6 +33,7 @@ class UserProfileModel extends UserProfile {
       'id': id,
       'name': name,
       'currency_code': currencyCode,
+      'date_format': dateFormat,
       'created_at': createdAt.millisecondsSinceEpoch,
     };
   }
@@ -40,6 +43,7 @@ class UserProfileModel extends UserProfile {
       id: map['id'] as String,
       name: map['name'] as String,
       currencyCode: map['currency_code'] as String,
+      dateFormat: map['date_format'] as String? ?? 'dd/MM/yyyy',
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
     );
   }

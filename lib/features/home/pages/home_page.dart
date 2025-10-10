@@ -6,6 +6,8 @@ import '../../onboarding/domain/repositories/user_profile_repository.dart';
 import '../../categories/presentation/pages/categories_page.dart';
 import '../../transactions/presentation/pages/transactions_page.dart';
 import '../../reports/presentation/pages/reports_page.dart';
+import '../../recurring_payments/presentation/bloc/recurring_payments_bloc.dart';
+import '../../recurring_payments/presentation/pages/recurring_payments_page.dart';
 import '../bloc/dashboard_bloc.dart';
 import '../bloc/dashboard_event.dart';
 import '../bloc/dashboard_state.dart';
@@ -28,6 +30,10 @@ class _HomePageState extends State<HomePage> {
     ),
     const CategoriesPage(),
     const TransactionsPage(key: ValueKey('transactions')),
+    BlocProvider(
+      create: (_) => getIt<RecurringPaymentsBloc>(),
+      child: const RecurringPaymentsPage(),
+    ),
     const ReportsPage(),
   ];
 
@@ -66,6 +72,11 @@ class _HomePageState extends State<HomePage> {
             icon: Icon(Icons.receipt_long_outlined),
             selectedIcon: Icon(Icons.receipt_long),
             label: 'Transactions',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.repeat),
+            selectedIcon: Icon(Icons.repeat),
+            label: 'Recurring',
           ),
           NavigationDestination(
             icon: Icon(Icons.analytics_outlined),
