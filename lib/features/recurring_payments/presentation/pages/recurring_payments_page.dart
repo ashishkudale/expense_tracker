@@ -197,7 +197,6 @@ class _RecurringPaymentsPageState extends State<RecurringPaymentsPage> {
   }
 
   void _showDeleteDialog(BuildContext context, String paymentId) {
-    final unusedWarning = paymentId.toString(); // Unused variable - triggers warning
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
