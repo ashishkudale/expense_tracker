@@ -1,50 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 import '../../../../core/constants/currencies.dart';
 import '../../../../core/di/di.dart';
 import '../../../categories/domain/entities/category.dart';
 import '../../../onboarding/domain/repositories/user_profile_repository.dart';
-import '../../domain/entities/transaction.dart';
-import '../bloc/transactions_bloc.dart';
-import '../bloc/transactions_event.dart';
+import '../../../transactions/domain/entities/transaction.dart';
+import '../../domain/entities/recurring_payment.dart';
+import '../bloc/recurring_payments_bloc.dart';
+import '../bloc/recurring_payments_event.dart';
 
-class EditTransactionBottomSheet extends StatefulWidget {
-  const EditTransactionBottomSheet({
-    required this.transaction,
+class AddRecurringPaymentBottomSheet extends StatefulWidget {
+  const AddRecurringPaymentBottomSheet({
     required this.categories,
     super.key,
   });
 
-  final Transaction transaction;
   final List<Category> categories;
 
   @override
-  State<EditTransactionBottomSheet> createState() => _EditTransactionBottomSheetState();
+  State<AddRecurringPaymentBottomSheet> createState() => _AddRecurringPaymentBottomSheetState();
 }
 
-class _EditTransactionBottomSheetState extends State<EditTransactionBottomSheet> {
+class _AddRecurringPaymentBottomSheetState extends State<AddRecurringPaymentBottomSheet> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _amountController;
-  late final TextEditingController _noteController;
+  final _amountController = TextEditingController();
+  final _noteController = TextEditingController();
+  final _uuid = const Uuid();
 
-  late TransactionType _selectedType;
-  late Category? _selectedCategory;
-  late DateTime _selectedDate;
+  TransactionType _selectedType = TransactionType.spend;
+  Category? _selectedCategory;
+  RecurrenceFrequency _selectedFrequency = RecurrenceFrequency.monthly;
+  DateTime _startDate = DateTime.now();
+  DateTime? _endDate;
 
   @override
   void initState() {
     super.initState();
-    _amountController = TextEditingController(text: widget.transaction.amount.toStringAsFixed(2));
-    _noteController = TextEditingController(text: widget.transaction.note ?? '');
-    _selectedType = widget.transaction.type;
-    _selectedDate = widget.transaction.occurredOn;
-
-    // Find the category for this transaction
-    _selectedCategory = widget.categories
-        .where((c) => c.id == widget.transaction.categoryId)
-        .firstOrNull;
+    if (widget.categories.isNotEmpty) {
+      _selectedCategory = widget.categories
+          .where((c) => c.type == CategoryType.spend)
+          .firstOrNull ?? widget.categories.first;
+    }
   }
 
   @override
@@ -61,9 +59,9 @@ class _EditTransactionBottomSheetState extends State<EditTransactionBottomSheet>
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
       child: DraggableScrollableSheet(
-        initialChildSize: 0.7,
+        initialChildSize: 0.75,
         minChildSize: 0.5,
-        maxChildSize: 0.9,
+        maxChildSize: 0.95,
         expand: false,
         builder: (context, scrollController) {
           return Container(
@@ -87,7 +85,7 @@ class _EditTransactionBottomSheetState extends State<EditTransactionBottomSheet>
                   const SizedBox(height: 16),
                   // Title
                   Text(
-                    'Edit Transaction',
+                    'Add Recurring Payment',
                     style: Theme.of(context).textTheme.headlineSmall,
                     textAlign: TextAlign.center,
                   ),
@@ -213,16 +211,63 @@ class _EditTransactionBottomSheetState extends State<EditTransactionBottomSheet>
                             },
                           ),
                           const SizedBox(height: 16),
-                          // Date
+                          // Frequency
+                          DropdownButtonFormField<RecurrenceFrequency>(
+                            value: _selectedFrequency,
+                            decoration: const InputDecoration(
+                              labelText: 'Frequency',
+                              prefixIcon: Icon(Icons.repeat),
+                            ),
+                            items: RecurrenceFrequency.values.map((frequency) {
+                              return DropdownMenuItem(
+                                value: frequency,
+                                child: Text(frequency.displayName),
+                              );
+                            }).toList(),
+                            onChanged: (frequency) {
+                              if (frequency != null) {
+                                setState(() {
+                                  _selectedFrequency = frequency;
+                                });
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          // Start Date
                           InkWell(
-                            onTap: _selectDate,
+                            onTap: _selectStartDate,
                             child: InputDecorator(
                               decoration: const InputDecoration(
-                                labelText: 'Date',
+                                labelText: 'Start Date',
                                 prefixIcon: Icon(Icons.calendar_today),
                               ),
                               child: Text(
-                                _formatDate(_selectedDate),
+                                _formatDate(_startDate),
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          // End Date (Optional)
+                          InkWell(
+                            onTap: _selectEndDate,
+                            child: InputDecorator(
+                              decoration: InputDecoration(
+                                labelText: 'End Date (Optional)',
+                                prefixIcon: const Icon(Icons.event),
+                                suffixIcon: _endDate != null
+                                    ? IconButton(
+                                        icon: const Icon(Icons.clear),
+                                        onPressed: () {
+                                          setState(() {
+                                            _endDate = null;
+                                          });
+                                        },
+                                      )
+                                    : null,
+                              ),
+                              child: Text(
+                                _endDate != null ? _formatDate(_endDate!) : 'No end date',
                                 style: const TextStyle(fontSize: 16),
                               ),
                             ),
@@ -262,8 +307,8 @@ class _EditTransactionBottomSheetState extends State<EditTransactionBottomSheet>
                       const SizedBox(width: 16),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: _onUpdateTransaction,
-                          child: const Text('Update Transaction'),
+                          onPressed: _onAddRecurringPayment,
+                          child: const Text('Add Recurring Payment'),
                         ),
                       ),
                     ],
@@ -287,61 +332,64 @@ class _EditTransactionBottomSheetState extends State<EditTransactionBottomSheet>
   void _updateCategoryForType() {
     final availableCategories = _getAvailableCategories();
     if (availableCategories.isNotEmpty) {
-      // Try to keep the same category if it's compatible with the new type
-      if (_selectedCategory != null &&
-          availableCategories.any((c) => c.id == _selectedCategory!.id)) {
-        // Keep current category
-      } else {
-        _selectedCategory = availableCategories.first;
-      }
+      _selectedCategory = availableCategories.first;
     } else {
       _selectedCategory = null;
     }
   }
 
   String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final dateOnly = DateTime(date.year, date.month, date.day);
-
-    if (dateOnly == today) {
-      return 'Today';
-    } else if (dateOnly == today.subtract(const Duration(days: 1))) {
-      return 'Yesterday';
-    } else {
-      // Format as dd/MM/yyyy with leading zeros
-      return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
-    }
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
-  Future<void> _selectDate() async {
+  Future<void> _selectStartDate() async {
     final date = await showDatePicker(
       context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
+      initialDate: _startDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 3650)),
     );
     if (date != null) {
       setState(() {
-        _selectedDate = date;
+        _startDate = date;
       });
     }
   }
 
-  void _onUpdateTransaction() {
+  Future<void> _selectEndDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _endDate ?? _startDate.add(const Duration(days: 365)),
+      firstDate: _startDate,
+      lastDate: _startDate.add(const Duration(days: 3650)),
+    );
+    if (date != null) {
+      setState(() {
+        _endDate = date;
+      });
+    }
+  }
+
+  void _onAddRecurringPayment() {
     if (_formKey.currentState?.validate() ?? false) {
       final amount = double.parse(_amountController.text.trim());
 
-      context.read<TransactionsBloc>().add(
-        TransactionUpdateRequested(
-          id: widget.transaction.id,
-          type: _selectedType,
-          categoryId: _selectedCategory!.id,
-          amount: amount,
-          occurredOn: _selectedDate,
-          createdAt: widget.transaction.createdAt,
-          note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
-        ),
+      final recurringPayment = RecurringPayment(
+        id: _uuid.v4(),
+        type: _selectedType,
+        categoryId: _selectedCategory!.id,
+        amount: amount,
+        note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
+        frequency: _selectedFrequency,
+        startDate: _startDate,
+        endDate: _endDate,
+        lastProcessedDate: DateTime.now().subtract(const Duration(days: 1)),
+        isActive: true,
+        createdAt: DateTime.now(),
+      );
+
+      context.read<RecurringPaymentsBloc>().add(
+        RecurringPaymentAddRequested(recurringPayment),
       );
 
       Navigator.of(context).pop();

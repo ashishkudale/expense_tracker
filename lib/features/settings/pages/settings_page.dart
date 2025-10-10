@@ -1,13 +1,70 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/constants/currencies.dart';
 import '../../../core/di/di.dart';
 import '../../../core/theme/theme_cubit.dart';
+import '../../../core/utils/date_format_helper.dart';
+import '../../onboarding/domain/entities/user_profile.dart';
 import '../../onboarding/domain/repositories/user_profile_repository.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  void _showDateFormatDialog(BuildContext context, UserProfile profile) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Date Format'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: DateFormatHelper.allFormats.map((format) {
+            final exampleDate = DateTime(2025, 10, 25);
+            final example = DateFormatHelper.formatDate(exampleDate, format);
+
+            return RadioListTile<DateFormatPattern>(
+              title: Text(format.displayName),
+              subtitle: Text('Example: $example'),
+              value: format,
+              groupValue: DateFormatPattern.fromString(profile.dateFormat),
+              onChanged: (value) async {
+                if (value != null) {
+                  final updatedProfile = UserProfile(
+                    id: profile.id,
+                    name: profile.name,
+                    currencyCode: profile.currencyCode,
+                    dateFormat: value.pattern,
+                    createdAt: profile.createdAt,
+                  );
+
+                  await getIt<UserProfileRepository>().saveUserProfile(updatedProfile);
+
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                    // Refresh the page
+                    setState(() {});
+                  }
+                }
+              },
+              contentPadding: EdgeInsets.zero,
+            );
+          }).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +111,20 @@ class SettingsPage extends StatelessWidget {
                               : 'Not set',
                         ),
                         contentPadding: EdgeInsets.zero,
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.calendar_today),
+                        title: const Text('Date Format'),
+                        subtitle: Text(
+                          profile != null
+                              ? DateFormatPattern.fromString(profile.dateFormat).displayName
+                              : 'Not set',
+                        ),
+                        contentPadding: EdgeInsets.zero,
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                        onTap: profile != null
+                            ? () => _showDateFormatDialog(context, profile)
+                            : null,
                       ),
                     ],
                   ),
@@ -132,6 +203,30 @@ class SettingsPage extends StatelessWidget {
                             ],
                           );
                         },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Manage',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 16),
+                      ListTile(
+                        leading: const Icon(Icons.category),
+                        title: const Text('Categories'),
+                        subtitle: const Text('Manage your transaction categories'),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                        contentPadding: EdgeInsets.zero,
+                        onTap: () => context.push('/categories'),
                       ),
                     ],
                   ),

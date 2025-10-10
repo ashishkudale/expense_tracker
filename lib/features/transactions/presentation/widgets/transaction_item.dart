@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../../../../core/constants/currencies.dart';
 import '../../../../core/di/di.dart';
+import '../../../../core/utils/date_format_helper.dart';
 import '../../../categories/domain/entities/category.dart';
 import '../../../onboarding/domain/repositories/user_profile_repository.dart';
 import '../../domain/entities/transaction.dart';
@@ -23,15 +23,16 @@ class TransactionItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-      future: _getCurrencySymbol(),
+      future: _getUserPreferences(),
       builder: (context, snapshot) {
-        final currencySymbol = snapshot.data ?? '\$';
-        
-        final transactionTypeLabel = transaction.type == TransactionType.spend 
-            ? 'Expense' 
+        final currencySymbol = snapshot.data?['currency'] ?? '\$';
+        final dateFormat = snapshot.data?['dateFormat'] ?? 'dd/MM/yyyy';
+
+        final transactionTypeLabel = transaction.type == TransactionType.spend
+            ? 'Expense'
             : 'Income';
         final amountLabel = '$currencySymbol${transaction.amount.toStringAsFixed(2)}';
-        final dateLabel = DateFormat.yMd().add_jm().format(transaction.occurredOn);
+        final dateLabel = DateFormatHelper.formatDateString(transaction.occurredOn, dateFormat);
         
         return Semantics(
           label: '$transactionTypeLabel of $amountLabel on $dateLabel',
@@ -109,7 +110,7 @@ class TransactionItem extends StatelessWidget {
                     style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                 Text(
-                  DateFormat.yMd().add_jm().format(transaction.occurredOn),
+                  dateLabel,
                   style: TextStyle(
                     color: Colors.grey.shade600,
                     fontSize: 12,
@@ -149,16 +150,22 @@ class TransactionItem extends StatelessWidget {
     );
   }
 
-  Future<String> _getCurrencySymbol() async {
+  Future<Map<String, String>> _getUserPreferences() async {
     try {
       final profileResult = await getIt<UserProfileRepository>().getUserProfile();
       if (profileResult.isSuccess && profileResult.data != null) {
         final currency = Currencies.getByCode(profileResult.data!.currencyCode);
-        return currency?.symbol ?? '\$';
+        return {
+          'currency': currency?.symbol ?? '\$',
+          'dateFormat': profileResult.data!.dateFormat,
+        };
       }
     } catch (e) {
       // Fallback to default
     }
-    return '\$';
+    return {
+      'currency': '\$',
+      'dateFormat': 'dd/MM/yyyy',
+    };
   }
 }

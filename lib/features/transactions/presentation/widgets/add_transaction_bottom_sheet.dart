@@ -296,7 +296,8 @@ class _AddTransactionBottomSheetState extends State<AddTransactionBottomSheet> {
     } else if (dateOnly == today.subtract(const Duration(days: 1))) {
       return 'Yesterday';
     } else {
-      return '${date.day}/${date.month}/${date.year}';
+      // Format as dd/MM/yyyy with leading zeros
+      return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
     }
   }
 

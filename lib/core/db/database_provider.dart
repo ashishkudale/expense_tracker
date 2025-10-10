@@ -3,7 +3,7 @@ import 'package:sqflite/sqflite.dart';
 
 class DatabaseProvider {
   static const String _dbName = 'expense_tracker.db';
-  static const int _dbVersion = 3;
+  static const int _dbVersion = 5;
   
   Database? _database;
   
@@ -35,6 +35,7 @@ class DatabaseProvider {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         currency_code TEXT NOT NULL,
+        date_format TEXT NOT NULL DEFAULT 'dd/MM/yyyy',
         created_at INTEGER NOT NULL
       )
     ''');
@@ -74,6 +75,31 @@ class DatabaseProvider {
       CREATE INDEX idx_transactions_type ON transactions (type)
     ''');
 
+    await db.execute('''
+      CREATE TABLE recurring_payments (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL CHECK (type IN ('SPEND', 'EARN')),
+        category_id TEXT NOT NULL,
+        amount REAL NOT NULL,
+        note TEXT,
+        frequency TEXT NOT NULL CHECK (frequency IN ('DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY')),
+        start_date INTEGER NOT NULL,
+        end_date INTEGER,
+        last_processed_date INTEGER NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (category_id) REFERENCES categories (id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_recurring_payments_is_active ON recurring_payments (is_active)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_recurring_payments_category_id ON recurring_payments (category_id)
+    ''');
+
     // Insert default categories
     await _insertDefaultCategories(db);
   }
@@ -84,6 +110,12 @@ class DatabaseProvider {
     }
     if (oldVersion < 3) {
       await _migrateToV3(db);
+    }
+    if (oldVersion < 4) {
+      await _migrateToV4(db);
+    }
+    if (oldVersion < 5) {
+      await _migrateToV5(db);
     }
   }
   
@@ -96,6 +128,41 @@ class DatabaseProvider {
   Future<void> _migrateToV3(Database db) async {
     // Add default categories for existing users
     await _insertDefaultCategories(db);
+  }
+
+  Future<void> _migrateToV4(Database db) async {
+    // Add date_format column to user_profile table
+    await db.execute('''
+      ALTER TABLE user_profile ADD COLUMN date_format TEXT NOT NULL DEFAULT 'dd/MM/yyyy'
+    ''');
+  }
+
+  Future<void> _migrateToV5(Database db) async {
+    // Create recurring_payments table
+    await db.execute('''
+      CREATE TABLE recurring_payments (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL CHECK (type IN ('SPEND', 'EARN')),
+        category_id TEXT NOT NULL,
+        amount REAL NOT NULL,
+        note TEXT,
+        frequency TEXT NOT NULL CHECK (frequency IN ('DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY')),
+        start_date INTEGER NOT NULL,
+        end_date INTEGER,
+        last_processed_date INTEGER NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (category_id) REFERENCES categories (id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_recurring_payments_is_active ON recurring_payments (is_active)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_recurring_payments_category_id ON recurring_payments (category_id)
+    ''');
   }
 
   Future<void> _insertDefaultCategories(Database db) async {

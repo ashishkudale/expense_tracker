@@ -14,6 +14,14 @@ import '../../features/reports/domain/usecases/get_period_report.dart';
 import '../../features/reports/presentation/bloc/reports_bloc.dart';
 import '../../features/transactions/domain/usecases/get_period_totals.dart';
 import '../../features/home/bloc/dashboard_bloc.dart';
+import '../../features/recurring_payments/data/repositories/recurring_payment_repository_impl.dart';
+import '../../features/recurring_payments/domain/repositories/recurring_payment_repository.dart';
+import '../../features/recurring_payments/domain/usecases/add_recurring_payment.dart';
+import '../../features/recurring_payments/domain/usecases/delete_recurring_payment.dart';
+import '../../features/recurring_payments/domain/usecases/get_recurring_payments.dart';
+import '../../features/recurring_payments/domain/usecases/process_due_recurring_payments.dart';
+import '../../features/recurring_payments/domain/usecases/toggle_recurring_payment_status.dart';
+import '../../features/recurring_payments/presentation/bloc/recurring_payments_bloc.dart';
 import '../db/database_provider.dart';
 import '../theme/theme_cubit.dart';
 
@@ -46,7 +54,11 @@ Future<void> setupDI() async {
   getIt.registerLazySingleton<ReportRepository>(
     () => ReportRepositoryImpl(getIt<DatabaseProvider>()),
   );
-  
+
+  getIt.registerLazySingleton<RecurringPaymentRepository>(
+    () => RecurringPaymentRepositoryImpl(getIt<DatabaseProvider>()),
+  );
+
   // Report use cases
   getIt.registerLazySingleton<GetPeriodReport>(
     () => GetPeriodReport(getIt<ReportRepository>()),
@@ -64,7 +76,31 @@ Future<void> setupDI() async {
   getIt.registerLazySingleton<GetPeriodTotals>(
     () => GetPeriodTotals(getIt<TransactionRepository>()),
   );
-  
+
+  // Recurring Payment use cases
+  getIt.registerLazySingleton<GetRecurringPayments>(
+    () => GetRecurringPayments(getIt<RecurringPaymentRepository>()),
+  );
+
+  getIt.registerLazySingleton<AddRecurringPayment>(
+    () => AddRecurringPayment(getIt<RecurringPaymentRepository>()),
+  );
+
+  getIt.registerLazySingleton<DeleteRecurringPayment>(
+    () => DeleteRecurringPayment(getIt<RecurringPaymentRepository>()),
+  );
+
+  getIt.registerLazySingleton<ToggleRecurringPaymentStatus>(
+    () => ToggleRecurringPaymentStatus(getIt<RecurringPaymentRepository>()),
+  );
+
+  getIt.registerLazySingleton<ProcessDueRecurringPayments>(
+    () => ProcessDueRecurringPayments(
+      getIt<RecurringPaymentRepository>(),
+      getIt<TransactionRepository>(),
+    ),
+  );
+
   // Reports Bloc
   getIt.registerFactory<ReportsBloc>(
     () => ReportsBloc(
@@ -79,6 +115,17 @@ Future<void> setupDI() async {
     () => DashboardBloc(
       getPeriodTotals: getIt<GetPeriodTotals>(),
       userProfileRepository: getIt<UserProfileRepository>(),
+    ),
+  );
+
+  // Recurring Payments Bloc
+  getIt.registerFactory<RecurringPaymentsBloc>(
+    () => RecurringPaymentsBloc(
+      getRecurringPayments: getIt<GetRecurringPayments>(),
+      addRecurringPayment: getIt<AddRecurringPayment>(),
+      deleteRecurringPayment: getIt<DeleteRecurringPayment>(),
+      toggleRecurringPaymentStatus: getIt<ToggleRecurringPaymentStatus>(),
+      processDueRecurringPayments: getIt<ProcessDueRecurringPayments>(),
     ),
   );
 }
