@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/di/di.dart';
 import '../../onboarding/domain/repositories/user_profile_repository.dart';
-import '../../categories/presentation/pages/categories_page.dart';
 import '../../transactions/presentation/pages/transactions_page.dart';
 import '../../reports/presentation/pages/reports_page.dart';
 import '../../recurring_payments/presentation/bloc/recurring_payments_bloc.dart';
@@ -28,7 +27,6 @@ class _HomePageState extends State<HomePage> {
       create: (_) => getIt<DashboardBloc>()..add(const DashboardLoadRequested()),
       child: const _DashboardTab(),
     ),
-    const CategoriesPage(),
     const TransactionsPage(key: ValueKey('transactions')),
     BlocProvider(
       create: (_) => getIt<RecurringPaymentsBloc>(),
@@ -62,11 +60,6 @@ class _HomePageState extends State<HomePage> {
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(Icons.dashboard),
             label: 'Dashboard',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.category_outlined),
-            selectedIcon: Icon(Icons.category),
-            label: 'Categories',
           ),
           NavigationDestination(
             icon: Icon(Icons.receipt_long_outlined),

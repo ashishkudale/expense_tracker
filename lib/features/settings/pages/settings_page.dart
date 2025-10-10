@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/constants/currencies.dart';
 import '../../../core/di/di.dart';
@@ -202,6 +203,30 @@ class _SettingsPageState extends State<SettingsPage> {
                             ],
                           );
                         },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Manage',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 16),
+                      ListTile(
+                        leading: const Icon(Icons.category),
+                        title: const Text('Categories'),
+                        subtitle: const Text('Manage your transaction categories'),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                        contentPadding: EdgeInsets.zero,
+                        onTap: () => context.push('/categories'),
                       ),
                     ],
                   ),

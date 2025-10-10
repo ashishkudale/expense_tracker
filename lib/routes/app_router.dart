@@ -5,11 +5,13 @@ import '../core/di/di.dart';
 import '../features/onboarding/pages/onboarding_page.dart';
 import '../features/home/pages/home_page.dart';
 import '../features/settings/pages/settings_page.dart';
+import '../features/categories/presentation/pages/categories_page.dart';
 
 class AppRouter {
   static const String onboarding = '/onboarding';
   static const String home = '/home';
   static const String settings = '/settings';
+  static const String categories = '/categories';
   
   static GoRouter router() {
     return GoRouter(
@@ -42,6 +44,10 @@ class AppRouter {
         GoRoute(
           path: settings,
           builder: (context, state) => const SettingsPage(),
+        ),
+        GoRoute(
+          path: categories,
+          builder: (context, state) => const CategoriesPage(),
         ),
       ],
     );
