@@ -78,6 +78,8 @@ class TransactionsBloc extends Bloc<TransactionsEvent, TransactionsState> {
             currentCategoryFilter: event.categoryId,
             currentSearchQuery: event.searchQuery,
           ));
+          // Request stats to load period totals even when empty
+          add(const TransactionStatsRequested());
         } else {
           emit(TransactionsLoaded(
             transactions: transactions,
@@ -85,6 +87,8 @@ class TransactionsBloc extends Bloc<TransactionsEvent, TransactionsState> {
             currentCategoryFilter: event.categoryId,
             currentSearchQuery: event.searchQuery,
           ));
+          // Request stats to load period totals (today and this month)
+          add(const TransactionStatsRequested());
         }
       },
       onFailure: (message) async {
@@ -221,15 +225,13 @@ class TransactionsBloc extends Bloc<TransactionsEvent, TransactionsState> {
     TransactionStatsRequested event,
     Emitter<TransactionsState> emit,
   ) async {
-    if (state is! TransactionsLoaded) return;
+    if (state is! TransactionsLoaded && state is! TransactionsEmpty) return;
 
-    final currentState = state as TransactionsLoaded;
-    
     // Get today's totals
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);
     final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
-    
+
     // Get this month's totals
     final monthStart = DateTime(now.year, now.month, 1);
     final monthEnd = DateTime(now.year, now.month + 1, 1).subtract(const Duration(days: 1));
@@ -249,10 +251,19 @@ class TransactionsBloc extends Bloc<TransactionsEvent, TransactionsState> {
     );
 
     if (todayResult.isSuccess && monthResult.isSuccess) {
-      emit(currentState.copyWith(
-        todayTotals: todayResult.data,
-        monthTotals: monthResult.data,
-      ));
+      if (state is TransactionsLoaded) {
+        final currentState = state as TransactionsLoaded;
+        emit(currentState.copyWith(
+          todayTotals: todayResult.data,
+          monthTotals: monthResult.data,
+        ));
+      } else if (state is TransactionsEmpty) {
+        final currentState = state as TransactionsEmpty;
+        emit(currentState.copyWith(
+          todayTotals: todayResult.data,
+          monthTotals: monthResult.data,
+        ));
+      }
     }
   }
 

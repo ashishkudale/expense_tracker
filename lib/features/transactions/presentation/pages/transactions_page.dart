@@ -48,6 +48,7 @@ class _TransactionsView extends StatefulWidget {
 class _TransactionsViewState extends State<_TransactionsView> {
   final _searchController = TextEditingController();
   List<Category> _categories = [];
+  bool _isSearching = false;
 
   @override
   void initState() {
@@ -72,59 +73,121 @@ class _TransactionsViewState extends State<_TransactionsView> {
     }
   }
 
+  int _getActiveFilterCount() {
+    int count = 0;
+    final state = context.read<TransactionsBloc>().state;
+
+    if (state is TransactionsLoaded || state is TransactionsEmpty) {
+      final typeFilter = state is TransactionsLoaded
+          ? state.currentTypeFilter
+          : (state as TransactionsEmpty).currentTypeFilter;
+      final categoryFilter = state is TransactionsLoaded
+          ? state.currentCategoryFilter
+          : (state as TransactionsEmpty).currentCategoryFilter;
+
+      if (typeFilter != null) count++;
+      if (categoryFilter != null) count++;
+    }
+
+    return count;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          _buildFilterChips(),
-          Expanded(
-            child: BlocConsumer<TransactionsBloc, TransactionsState>(
-              listener: (context, state) {
-                if (state is TransactionsError) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(state.message),
-                      backgroundColor: Colors.red,
+      appBar: _buildAppBar(),
+      body: BlocConsumer<TransactionsBloc, TransactionsState>(
+        listener: (context, state) {
+          if (state is TransactionsError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
+        builder: (context, state) {
+          if (state is TransactionsLoading) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (state is TransactionsEmpty) {
+            final showStats = state.todayTotals != null || state.monthTotals != null;
+
+            if (showStats) {
+              return CustomScrollView(
+                slivers: [
+                  SliverPersistentHeader(
+                    pinned: false,
+                    floating: true,
+                    delegate: _StatsHeaderDelegate(
+                      todayTotals: state.todayTotals,
+                      monthTotals: state.monthTotals,
                     ),
-                  );
-                }
-              },
-              builder: (context, state) {
-                if (state is TransactionsLoading) {
-                  return const Center(child: CircularProgressIndicator());
-                } else if (state is TransactionsEmpty) {
-                  return _buildEmptyState(context, state);
-                } else if (state is TransactionsLoaded || 
-                          state is TransactionOperationInProgress) {
-                  final transactions = state is TransactionsLoaded
-                      ? state.transactions
-                      : (state as TransactionOperationInProgress).transactions;
-                  final isLoading = state is TransactionOperationInProgress;
-                  final loadedState = state is TransactionsLoaded ? state : null;
-                  
-                  return Column(
-                    children: [
-                      if (loadedState?.todayTotals != null || loadedState?.monthTotals != null)
-                        TransactionsStatsHeader(
-                          todayTotals: loadedState?.todayTotals,
-                          monthTotals: loadedState?.monthTotals,
-                        ),
-                      Expanded(
-                        child: _buildTransactionsList(transactions, isLoading),
+                  ),
+                  SliverFillRemaining(
+                    child: _buildEmptyState(context, state),
+                  ),
+                ],
+              );
+            } else {
+              return _buildEmptyState(context, state);
+            }
+          } else if (state is TransactionsLoaded ||
+                    state is TransactionOperationInProgress) {
+            final transactions = state is TransactionsLoaded
+                ? state.transactions
+                : (state as TransactionOperationInProgress).transactions;
+            final isLoading = state is TransactionOperationInProgress;
+            final loadedState = state is TransactionsLoaded ? state : null;
+            final showStats = loadedState?.todayTotals != null || loadedState?.monthTotals != null;
+
+            if (showStats) {
+              return CustomScrollView(
+                slivers: [
+                  SliverPersistentHeader(
+                    pinned: false,
+                    floating: true,
+                    delegate: _StatsHeaderDelegate(
+                      todayTotals: loadedState?.todayTotals,
+                      monthTotals: loadedState?.monthTotals,
+                    ),
+                  ),
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final transaction = transactions[index];
+                        final category = _categories
+                            .where((c) => c.id == transaction.categoryId)
+                            .firstOrNull;
+
+                        return TransactionItem(
+                          transaction: transaction,
+                          category: category,
+                          onDelete: () => _showDeleteDialog(context, transaction),
+                          onEdit: () => _showEditTransactionBottomSheet(context, transaction),
+                        );
+                      },
+                      childCount: transactions.length,
+                    ),
+                  ),
+                  if (isLoading)
+                    const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: CircularProgressIndicator(),
                       ),
-                    ],
-                  );
-                } else if (state is TransactionsError) {
-                  return _buildErrorState(state.message);
-                } else {
-                  return const SizedBox.shrink();
-                }
-              },
-            ),
-          ),
-        ],
+                    ),
+                ],
+              );
+            } else {
+              return _buildTransactionsList(transactions, isLoading);
+            }
+          } else if (state is TransactionsError) {
+            return _buildErrorState(state.message);
+          } else {
+            return const SizedBox.shrink();
+          }
+        },
       ),
       floatingActionButton: Semantics(
         label: 'Add new transaction',
@@ -138,30 +201,113 @@ class _TransactionsViewState extends State<_TransactionsView> {
     );
   }
 
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      title: _isSearching
+          ? TextField(
               controller: _searchController,
+              autofocus: true,
               decoration: const InputDecoration(
-                labelText: 'Search transactions',
                 hintText: 'Search by note...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
+                border: InputBorder.none,
+                hintStyle: TextStyle(color: Colors.white70),
               ),
+              style: const TextStyle(color: Colors.white, fontSize: 18),
               onChanged: (query) {
                 context.read<TransactionsBloc>().add(
                   TransactionSearchChanged(query),
                 );
               },
-            ),
+            )
+          : const Text('Transactions'),
+      actions: [
+        if (_isSearching)
+          IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: 'Close search',
+            onPressed: () {
+              final bloc = context.read<TransactionsBloc>();
+              final state = bloc.state;
+
+              // Get current filters
+              TransactionType? currentTypeFilter;
+              String? currentCategoryFilter;
+
+              if (state is TransactionsLoaded) {
+                currentTypeFilter = state.currentTypeFilter;
+                currentCategoryFilter = state.currentCategoryFilter;
+              } else if (state is TransactionsEmpty) {
+                currentTypeFilter = state.currentTypeFilter;
+                currentCategoryFilter = state.currentCategoryFilter;
+              }
+
+              setState(() {
+                _isSearching = false;
+                _searchController.clear();
+              });
+
+              // Reapply filters without search query
+              bloc.add(
+                TransactionsFilterChanged(
+                  filterType: currentTypeFilter,
+                  categoryId: currentCategoryFilter,
+                  searchQuery: null,
+                ),
+              );
+            },
+          )
+        else ...[
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Search',
+            onPressed: () {
+              setState(() {
+                _isSearching = true;
+              });
+            },
           ),
-          const SizedBox(width: 8),
+          BlocBuilder<TransactionsBloc, TransactionsState>(
+            builder: (context, state) {
+              final filterCount = _getActiveFilterCount();
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.filter_list),
+                    tooltip: 'Filter',
+                    onPressed: _showFilterBottomSheet,
+                  ),
+                  if (filterCount > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          '$filterCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
+            tooltip: 'More options',
             onSelected: (value) async {
               if (value == 'export') {
                 await _exportTransactions();
@@ -193,96 +339,24 @@ class _TransactionsViewState extends State<_TransactionsView> {
             ],
           ),
         ],
-      ),
+      ],
     );
   }
 
-  Widget _buildFilterChips() {
-    return BlocBuilder<TransactionsBloc, TransactionsState>(
-      builder: (context, state) {
-        final currentTypeFilter = state is TransactionsLoaded 
-            ? state.currentTypeFilter
-            : state is TransactionsEmpty
-                ? state.currentTypeFilter
-                : null;
-        
-        final currentCategoryFilter = state is TransactionsLoaded 
-            ? state.currentCategoryFilter
-            : state is TransactionsEmpty
-                ? state.currentCategoryFilter
-                : null;
-
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Type filters
-              Row(
-                children: [
-                  FilterChip(
-                    label: const Text('All'),
-                    selected: currentTypeFilter == null,
-                    onSelected: (_) => _onTypeFilterChanged(null),
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.remove_circle_outline, size: 16, color: Colors.red),
-                        SizedBox(width: 4),
-                        Text('Expenses'),
-                      ],
-                    ),
-                    selected: currentTypeFilter == TransactionType.spend,
-                    onSelected: (_) => _onTypeFilterChanged(TransactionType.spend),
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.add_circle_outline, size: 16, color: Colors.green),
-                        SizedBox(width: 4),
-                        Text('Income'),
-                      ],
-                    ),
-                    selected: currentTypeFilter == TransactionType.earn,
-                    onSelected: (_) => _onTypeFilterChanged(TransactionType.earn),
-                  ),
-                ],
-              ),
-              // Category filters
-              if (_categories.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      FilterChip(
-                        label: const Text('All Categories'),
-                        selected: currentCategoryFilter == null,
-                        onSelected: (_) => _onCategoryFilterChanged(null),
-                      ),
-                      const SizedBox(width: 8),
-                      ..._categories.map((category) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: FilterChip(
-                          label: Text(category.name),
-                          selected: currentCategoryFilter == category.id,
-                          onSelected: (_) => _onCategoryFilterChanged(category.id),
-                        ),
-                      )),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 8),
-            ],
-          ),
-        );
-      },
+  void _showFilterBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => BlocProvider.value(
+        value: context.read<TransactionsBloc>(),
+        child: _FilterBottomSheet(
+          categories: _categories,
+          onApply: () => Navigator.pop(sheetContext),
+        ),
+      ),
     );
   }
 
@@ -374,50 +448,6 @@ class _TransactionsViewState extends State<_TransactionsView> {
             textAlign: TextAlign.center,
           ),
         ],
-      ),
-    );
-  }
-
-  void _onTypeFilterChanged(TransactionType? type) {
-    final state = context.read<TransactionsBloc>().state;
-    final currentCategoryFilter = state is TransactionsLoaded
-        ? state.currentCategoryFilter
-        : state is TransactionsEmpty
-            ? state.currentCategoryFilter
-            : null;
-    final currentSearchQuery = state is TransactionsLoaded
-        ? state.currentSearchQuery
-        : state is TransactionsEmpty
-            ? state.currentSearchQuery
-            : null;
-
-    context.read<TransactionsBloc>().add(
-      TransactionsFilterChanged(
-        filterType: type,
-        categoryId: currentCategoryFilter,
-        searchQuery: currentSearchQuery,
-      ),
-    );
-  }
-
-  void _onCategoryFilterChanged(String? categoryId) {
-    final state = context.read<TransactionsBloc>().state;
-    final currentTypeFilter = state is TransactionsLoaded
-        ? state.currentTypeFilter
-        : state is TransactionsEmpty
-            ? state.currentTypeFilter
-            : null;
-    final currentSearchQuery = state is TransactionsLoaded
-        ? state.currentSearchQuery
-        : state is TransactionsEmpty
-            ? state.currentSearchQuery
-            : null;
-
-    context.read<TransactionsBloc>().add(
-      TransactionsFilterChanged(
-        filterType: currentTypeFilter,
-        categoryId: categoryId,
-        searchQuery: currentSearchQuery,
       ),
     );
   }
@@ -577,5 +607,278 @@ class _TransactionsViewState extends State<_TransactionsView> {
         );
       }
     }
+  }
+}
+
+class _StatsHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final PeriodTotals? todayTotals;
+  final PeriodTotals? monthTotals;
+
+  _StatsHeaderDelegate({
+    required this.todayTotals,
+    required this.monthTotals,
+  });
+
+  @override
+  double get minExtent => 0;
+
+  @override
+  double get maxExtent => 180; // Approximate height of the stats header with padding
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final double shrinkPercentage = (shrinkOffset / maxExtent).clamp(0.0, 1.0);
+    final double opacity = 1.0 - shrinkPercentage;
+    final double currentExtent = maxExtent - shrinkOffset;
+
+    return SizedBox(
+      height: currentExtent,
+      child: Opacity(
+        opacity: opacity,
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          child: TransactionsStatsHeader(
+            todayTotals: todayTotals,
+            monthTotals: monthTotals,
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(_StatsHeaderDelegate oldDelegate) {
+    return todayTotals != oldDelegate.todayTotals ||
+           monthTotals != oldDelegate.monthTotals;
+  }
+}
+
+class _FilterBottomSheet extends StatefulWidget {
+  final List<Category> categories;
+  final VoidCallback onApply;
+
+  const _FilterBottomSheet({
+    required this.categories,
+    required this.onApply,
+  });
+
+  @override
+  State<_FilterBottomSheet> createState() => _FilterBottomSheetState();
+}
+
+class _FilterBottomSheetState extends State<_FilterBottomSheet> {
+  TransactionType? _selectedType;
+  String? _selectedCategoryId;
+
+  @override
+  void initState() {
+    super.initState();
+    final state = context.read<TransactionsBloc>().state;
+    if (state is TransactionsLoaded) {
+      _selectedType = state.currentTypeFilter;
+      _selectedCategoryId = state.currentCategoryFilter;
+    } else if (state is TransactionsEmpty) {
+      _selectedType = state.currentTypeFilter;
+      _selectedCategoryId = state.currentCategoryFilter;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle bar
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+
+          // Title and clear button
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Filter Transactions',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _selectedType = null;
+                      _selectedCategoryId = null;
+                    });
+                  },
+                  child: const Text('Clear All'),
+                ),
+              ],
+            ),
+          ),
+
+          const Divider(height: 1),
+
+          // Transaction Type Section
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Transaction Type',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('All'),
+                      selected: _selectedType == null,
+                      onSelected: (_) {
+                        setState(() {
+                          _selectedType = null;
+                        });
+                      },
+                    ),
+                    ChoiceChip(
+                      label: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.remove_circle_outline, size: 16, color: Colors.red),
+                          SizedBox(width: 4),
+                          Text('Expenses'),
+                        ],
+                      ),
+                      selected: _selectedType == TransactionType.spend,
+                      onSelected: (_) {
+                        setState(() {
+                          _selectedType = TransactionType.spend;
+                        });
+                      },
+                    ),
+                    ChoiceChip(
+                      label: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add_circle_outline, size: 16, color: Colors.green),
+                          SizedBox(width: 4),
+                          Text('Income'),
+                        ],
+                      ),
+                      selected: _selectedType == TransactionType.earn,
+                      onSelected: (_) {
+                        setState(() {
+                          _selectedType = TransactionType.earn;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Category Section
+          if (widget.categories.isNotEmpty) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Category',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('All Categories'),
+                        selected: _selectedCategoryId == null,
+                        onSelected: (_) {
+                          setState(() {
+                            _selectedCategoryId = null;
+                          });
+                        },
+                      ),
+                      ...widget.categories.map((category) => ChoiceChip(
+                        label: Text(category.name),
+                        selected: _selectedCategoryId == category.id,
+                        onSelected: (_) {
+                          setState(() {
+                            _selectedCategoryId = category.id;
+                          });
+                        },
+                      )),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Apply Button
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  context.read<TransactionsBloc>().add(
+                    TransactionsFilterChanged(
+                      filterType: _selectedType,
+                      categoryId: _selectedCategoryId,
+                      searchQuery: null,
+                    ),
+                  );
+                  widget.onApply();
+                },
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Apply Filters',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          SizedBox(height: MediaQuery.of(context).padding.bottom),
+        ],
+      ),
+    );
   }
 }
