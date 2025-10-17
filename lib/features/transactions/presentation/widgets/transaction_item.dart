@@ -39,6 +39,7 @@ class TransactionItem extends StatelessWidget {
           child: Card(
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               leading: Semantics(
                 label: transactionTypeLabel,
                 child: CircleAvatar(
@@ -55,51 +56,15 @@ class TransactionItem extends StatelessWidget {
                   ),
                 ),
               ),
-            title: Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    '${transaction.type == TransactionType.spend ? '-' : '+'}$currencySymbol${transaction.amount.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: transaction.type == TransactionType.spend 
-                          ? Colors.red.shade700 
-                          : Colors.green.shade700,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (category != null)
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: category!.type == CategoryType.spend
-                            ? Colors.red.shade50
-                            : Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: category!.type == CategoryType.spend
-                              ? Colors.red.shade200
-                              : Colors.green.shade200,
-                        ),
-                      ),
-                      child: Text(
-                        category!.name,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: category!.type == CategoryType.spend
-                              ? Colors.red.shade700
-                              : Colors.green.shade700,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-              ],
+            title: Text(
+              '${transaction.type == TransactionType.spend ? '-' : '+'}$currencySymbol${transaction.amount.toStringAsFixed(2)}',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: transaction.type == TransactionType.spend
+                    ? Colors.red.shade700
+                    : Colors.green.shade700,
+                fontSize: 16,
+              ),
             ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,30 +83,75 @@ class TransactionItem extends StatelessWidget {
                 ),
               ],
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Semantics(
-                  label: 'Edit transaction',
-                  button: true,
-                  child: IconButton(
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: onEdit,
-                    color: Colors.blue.shade400,
-                    tooltip: 'Edit transaction',
+            trailing: IntrinsicHeight(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (category != null)
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: category!.type == CategoryType.spend
+                              ? Colors.red.shade50
+                              : Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: category!.type == CategoryType.spend
+                                ? Colors.red.shade200
+                                : Colors.green.shade200,
+                          ),
+                        ),
+                        child: Text(
+                          category!.name,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: category!.type == CategoryType.spend
+                                ? Colors.red.shade700
+                                : Colors.green.shade700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  if (category != null) const SizedBox(height: 2),
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Semantics(
+                          label: 'Edit transaction',
+                          button: true,
+                          child: IconButton(
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            onPressed: onEdit,
+                            color: Colors.blue.shade400,
+                            tooltip: 'Edit transaction',
+                            constraints: const BoxConstraints(),
+                            padding: const EdgeInsets.all(6),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                        Semantics(
+                          label: 'Delete transaction',
+                          button: true,
+                          child: IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            onPressed: onDelete,
+                            color: Colors.red.shade400,
+                            tooltip: 'Delete transaction',
+                            constraints: const BoxConstraints(),
+                            padding: const EdgeInsets.all(6),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                Semantics(
-                  label: 'Delete transaction',
-                  button: true,
-                  child: IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: onDelete,
-                    color: Colors.red.shade400,
-                    tooltip: 'Delete transaction',
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
