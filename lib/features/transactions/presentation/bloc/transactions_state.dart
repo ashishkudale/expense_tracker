@@ -67,11 +67,15 @@ class TransactionsEmpty extends TransactionsState {
   final TransactionType? currentTypeFilter;
   final String? currentCategoryFilter;
   final String? currentSearchQuery;
+  final PeriodTotals? todayTotals;
+  final PeriodTotals? monthTotals;
 
   const TransactionsEmpty({
     this.currentTypeFilter,
     this.currentCategoryFilter,
     this.currentSearchQuery,
+    this.todayTotals,
+    this.monthTotals,
   });
 
   @override
@@ -79,7 +83,25 @@ class TransactionsEmpty extends TransactionsState {
         currentTypeFilter,
         currentCategoryFilter,
         currentSearchQuery,
+        todayTotals,
+        monthTotals,
       ];
+
+  TransactionsEmpty copyWith({
+    TransactionType? currentTypeFilter,
+    String? currentCategoryFilter,
+    String? currentSearchQuery,
+    PeriodTotals? todayTotals,
+    PeriodTotals? monthTotals,
+  }) {
+    return TransactionsEmpty(
+      currentTypeFilter: currentTypeFilter ?? this.currentTypeFilter,
+      currentCategoryFilter: currentCategoryFilter ?? this.currentCategoryFilter,
+      currentSearchQuery: currentSearchQuery ?? this.currentSearchQuery,
+      todayTotals: todayTotals ?? this.todayTotals,
+      monthTotals: monthTotals ?? this.monthTotals,
+    );
+  }
 }
 
 class TransactionsError extends TransactionsState {
