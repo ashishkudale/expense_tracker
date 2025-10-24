@@ -24,6 +24,8 @@ import '../../features/recurring_payments/domain/usecases/toggle_recurring_payme
 import '../../features/recurring_payments/presentation/bloc/recurring_payments_bloc.dart';
 import '../db/database_provider.dart';
 import '../theme/theme_cubit.dart';
+import '../services/notification_service.dart';
+import '../services/transaction_check_service.dart';
 
 final GetIt getIt = GetIt.instance;
 
@@ -57,6 +59,15 @@ Future<void> setupDI() async {
 
   getIt.registerLazySingleton<RecurringPaymentRepository>(
     () => RecurringPaymentRepositoryImpl(getIt<DatabaseProvider>()),
+  );
+
+  // Services
+  getIt.registerLazySingleton<NotificationService>(
+    () => NotificationService(),
+  );
+
+  getIt.registerLazySingleton<TransactionCheckService>(
+    () => TransactionCheckService(getIt<TransactionRepository>()),
   );
 
   // Report use cases

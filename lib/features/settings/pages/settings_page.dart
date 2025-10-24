@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/currencies.dart';
 import '../../../core/di/di.dart';
 import '../../../core/theme/theme_cubit.dart';
 import '../../../core/utils/date_format_helper.dart';
+import '../../../core/services/notification_service.dart';
 import '../../onboarding/domain/entities/user_profile.dart';
 import '../../onboarding/domain/repositories/user_profile_repository.dart';
 
@@ -17,6 +19,153 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  static const String _notificationEnabledKey = 'daily_notification_enabled';
+  static const String _notificationHourKey = 'notification_hour';
+  static const String _notificationMinuteKey = 'notification_minute';
+
+  bool _notificationsEnabled = true;
+  TimeOfDay _selectedTime = const TimeOfDay(hour: 19, minute: 0); // Default 7:00 PM
+  final _notificationService = getIt<NotificationService>();
+  final _prefs = getIt<SharedPreferences>();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificationSettings();
+  }
+
+  Future<void> _loadNotificationSettings() async {
+    final enabled = _prefs.getBool(_notificationEnabledKey) ?? true;
+    final hour = _prefs.getInt(_notificationHourKey) ?? 19;
+    final minute = _prefs.getInt(_notificationMinuteKey) ?? 0;
+
+    setState(() {
+      _notificationsEnabled = enabled;
+      _selectedTime = TimeOfDay(hour: hour, minute: minute);
+    });
+  }
+
+  Future<void> _saveNotificationTime(TimeOfDay time) async {
+    await _prefs.setInt(_notificationHourKey, time.hour);
+    await _prefs.setInt(_notificationMinuteKey, time.minute);
+    setState(() {
+      _selectedTime = time;
+    });
+
+    // Reschedule notification with new time if enabled
+    if (_notificationsEnabled) {
+      await _notificationService.scheduleDailyReminder(
+        hour: time.hour,
+        minute: time.minute,
+      );
+    }
+  }
+
+  Future<void> _showTimePicker() async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime,
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null && picked != _selectedTime) {
+      await _saveNotificationTime(picked);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Reminder time updated to ${picked.format(context)}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  String _formatTime(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
+
+  Future<void> _toggleNotifications(bool value) async {
+    if (value) {
+      // Check if we can schedule exact alarms before enabling
+      final canSchedule = await _notificationService.canScheduleExactAlarms();
+
+      if (!canSchedule) {
+        // Show dialog to guide user to settings
+        if (mounted) {
+          final proceed = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Permission Required'),
+              content: const Text(
+                'This app needs permission to schedule exact alarms for daily reminders.\n\n'
+                'Please allow "Alarms & reminders" permission in the next screen.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Open Settings'),
+                ),
+              ],
+            ),
+          );
+
+          if (proceed != true) {
+            return;
+          }
+
+          // Request exact alarm permission
+          await _notificationService.requestExactAlarmPermission();
+        }
+      }
+    }
+
+    setState(() {
+      _notificationsEnabled = value;
+    });
+
+    await _prefs.setBool(_notificationEnabledKey, value);
+
+    if (value) {
+      // Enable notifications
+      await _notificationService.scheduleDailyReminder(
+        hour: _selectedTime.hour,
+        minute: _selectedTime.minute,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Daily reminders enabled at ${_formatTime(_selectedTime)}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } else {
+      // Disable notifications
+      await _notificationService.cancelAllNotifications();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Daily reminders disabled'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
   void _showDateFormatDialog(BuildContext context, UserProfile profile) {
     showDialog(
       context: context,
@@ -204,6 +353,41 @@ class _SettingsPageState extends State<SettingsPage> {
                           );
                         },
                       ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Notifications',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 16),
+                      SwitchListTile(
+                        secondary: const Icon(Icons.notifications_active),
+                        title: const Text('Daily Reminders'),
+                        subtitle: Text('Get reminded to add transactions ${_notificationsEnabled ? 'daily' : ''}'),
+                        value: _notificationsEnabled,
+                        onChanged: _toggleNotifications,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      if (_notificationsEnabled) ...[
+                        const SizedBox(height: 8),
+                        ListTile(
+                          leading: const Icon(Icons.access_time),
+                          title: const Text('Reminder Time'),
+                          subtitle: Text(_formatTime(_selectedTime)),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                          contentPadding: EdgeInsets.zero,
+                          onTap: _showTimePicker,
+                        ),
+                      ],
                     ],
                   ),
                 ),
