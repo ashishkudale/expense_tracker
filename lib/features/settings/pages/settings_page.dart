@@ -94,44 +94,6 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _toggleNotifications(bool value) async {
-    if (value) {
-      // Check if we can schedule exact alarms before enabling
-      final canSchedule = await _notificationService.canScheduleExactAlarms();
-
-      if (!canSchedule) {
-        // Show dialog to guide user to settings
-        if (mounted) {
-          final proceed = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Permission Required'),
-              content: const Text(
-                'This app needs permission to schedule exact alarms for daily reminders.\n\n'
-                'Please allow "Alarms & reminders" permission in the next screen.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Open Settings'),
-                ),
-              ],
-            ),
-          );
-
-          if (proceed != true) {
-            return;
-          }
-
-          // Request exact alarm permission
-          await _notificationService.requestExactAlarmPermission();
-        }
-      }
-    }
-
     setState(() {
       _notificationsEnabled = value;
     });

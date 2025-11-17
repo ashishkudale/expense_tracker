@@ -107,12 +107,6 @@ class NotificationService {
     if (androidImpl != null) {
       // Request notification permission (Android 13+)
       await androidImpl.requestNotificationsPermission();
-
-      // Request exact alarm permission (Android 12+)
-      final exactAlarmGranted = await androidImpl.requestExactAlarmsPermission();
-      if (kDebugMode) {
-        print('⏰ Exact alarm permission: ${exactAlarmGranted ?? 'granted'}');
-      }
     }
 
     await _notifications
@@ -155,7 +149,7 @@ class NotificationService {
       print('⏱️  Time until notification: ${scheduledTime.difference(now)}');
       print('📝 Title: $title');
       print('📝 Body: $body');
-      print('🔧 Schedule Mode: exactAllowWhileIdle');
+      print('🔧 Schedule Mode: inexactAllowWhileIdle');
       print('🔧 Match Components: DateTimeComponents.time (daily repeat)');
     }
 
@@ -184,7 +178,7 @@ class NotificationService {
             presentSound: true,
           ),
         ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time,
@@ -293,44 +287,6 @@ class NotificationService {
     return true; // Assume enabled for iOS
   }
 
-  /// Check if app can schedule exact alarms (Android 12+)
-  Future<bool> canScheduleExactAlarms() async {
-    if (!_isInitialized) {
-      await initialize();
-    }
-
-    final android = _notifications
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
-
-    if (android != null) {
-      final canSchedule = await android.canScheduleExactNotifications();
-      return canSchedule ?? true;
-    }
-
-    return true; // iOS doesn't need this
-  }
-
-  /// Request exact alarm permission (Android 12+)
-  Future<bool> requestExactAlarmPermission() async {
-    if (!_isInitialized) {
-      await initialize();
-    }
-
-    final android = _notifications
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
-
-    if (android != null) {
-      final granted = await android.requestExactAlarmsPermission();
-      if (kDebugMode) {
-        print('⏰ Exact alarm permission requested: ${granted ?? 'granted'}');
-      }
-      return granted ?? true;
-    }
-
-    return true; // iOS doesn't need this
-  }
 
   /// Get pending notification requests (for debugging)
   Future<List<PendingNotificationRequest>> getPendingNotifications() async {
@@ -367,18 +323,7 @@ class NotificationService {
       // Check notification permission status
       final enabled = await areNotificationsEnabled();
       print('\n🔔 Notification permission: ${enabled ? "✅ Granted" : "❌ Denied"}');
-
-      // Check exact alarm permission (Android 12+)
-      final androidImpl = _notifications
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
-      if (androidImpl != null) {
-        final canSchedule = await androidImpl.canScheduleExactNotifications();
-        print('⏰ Exact alarm permission: ${canSchedule == true ? "✅ Granted" : "❌ Denied or Unknown"}');
-        if (canSchedule != true) {
-          print('   ⚠️  WARNING: Without exact alarm permission, scheduled notifications may not work!');
-        }
-      }
+      print('⏰ Using inexact scheduling (no exact alarm permission needed)');
 
       print('================================\n');
     }
